@@ -1,0 +1,1 @@
+web: gunicorn lutali.wsgi --log-file -
