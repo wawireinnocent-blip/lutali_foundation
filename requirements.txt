@@ -5,3 +5,4 @@ dj-database-url==2.1.0
 reportlab==4.2.0
 Pillow==11.3.0
 psycopg[binary]==3.2.10
+openpyxl
