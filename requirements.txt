@@ -1,7 +1,7 @@
 Django==5.1.4
 gunicorn==23.0.0
 whitenoise==6.9.0
-dj-database-url==3.0.0
+dj-database-url==2.1.0
 reportlab==4.2.0
 Pillow==11.3.0
-psycopg2-binary==2.9.12
+psycopg[binary]==3.2.3
