@@ -3,7 +3,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.contrib import messages
-from.models import Member, Payment, Expense
+from .models import Member
 import re
 
 def login_view(request):
