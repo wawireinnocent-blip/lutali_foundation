@@ -1,1 +1,1 @@
-web: gunicorn lutali.wsgi --log-file -
+web: gunicorn lutali.wsgi
