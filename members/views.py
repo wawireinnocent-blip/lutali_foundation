@@ -4,7 +4,7 @@ from django.contrib import messages
 from .models import Member
 
 def admin_dashboard(request):
-    members = Member.objects.all().order_by('member_number')
+    members = Member.objects.all().order_by('member_no')
     active_count = members.filter(status='ACTIVE').count()
     inactive_count = members.filter(status='INACTIVE').count()
     total_count = members.count()
