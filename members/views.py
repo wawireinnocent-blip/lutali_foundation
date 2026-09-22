@@ -57,5 +57,6 @@ def delete_member(request, member_id):
     return redirect('admin_dashboard')
 
 def home(request):
-    members = Member.objects.filter(status='ACTIVE')
-    return render(request, 'home.html', {'members': members})
+    def home(request):
+    members = Member.objects.all()
+    return render(request, 'admin_dashboard.html', {'members': members})
