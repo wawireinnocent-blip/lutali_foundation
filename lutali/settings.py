@@ -49,7 +49,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'wsgi.application'
+WSGI_APPLICATION = 'lutali.wsgi.application'
 
 # DATABASE - PERMANENT NEON
 if os.environ.get('DATABASE_URL'):
