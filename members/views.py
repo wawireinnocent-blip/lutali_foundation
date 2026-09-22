@@ -1,5 +1,6 @@
 from django.shortcuts import redirect, get_object_or_404
 from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
 from .models import Member
 
 def home(request):
@@ -7,32 +8,31 @@ def home(request):
 
 def admin_dashboard(request):
     members = Member.objects.all().order_by('member_no')
+    count = members.count()
     
-    # HTML ya moja kwa moja - hakuna haja ya template!
-    html = """
-    <html><head><title>Lutali Foundation - Admin</title>
-    <style>
-    body{font-family:Arial;padding:20px;background:#f5f5f5}
-    table{width:100%;border-collapse:collapse;background:white}
-    th,td{padding:10px;border:1px solid #ddd;text-align:left}
-    th{background:#2c3e50;color:white}
-    .btn{padding:5px 10px;text-decoration:none;border-radius:4px;margin:2px;display:inline-block}
-    .btn-add{background:green;color:white} .btn-edit{background:blue;color:white} .btn-del{background:red;color:white}
-    </style></head><body>
-    <h1>Lutali Foundation - Members Dashboard</h1>
-    <p>Total Members: """ + str(members.count()) + """</p>
-    <a href='/add-member/' class='btn btn-add'>+ Add Member</a><br><br>
-    <table><tr><th>No</th><th>Full Name</th><th>Phone</th><th>Status</th><th>Actions</th></tr>
-    """
+    rows = ""
     for m in members:
-        html += f"<tr><td>{m.member_no}</td><td>{m.full_name}</td><td>{m.phone}</td><td>{m.status}</td><td><a href='/edit-member/{m.id}/' class='btn btn-edit'>Edit</a> <a href='/delete-member/{m.id}/' class='btn btn-del'>Delete</a></td></tr>"
-    
-    if not members:
-        html += "<tr><td colspan='5' style='text-align:center;color:red;'><b>Hakuna members bado - Enda Shell uandike: python import_members.py</b></td></tr>"
-    
-    html += "</table></body></html>"
+        rows += f"<tr><td>{m.member_no}</td><td>{m.full_name}</td><td>{m.phone}</td><td>{m.status}</td><td><a href='/edit-member/{m.id}/' style='color:blue'>Edit</a> | <a href='/delete-member/{m.id}/' style='color:red'>Delete</a></td></tr>"
+
+    if count == 0:
+        rows = "<tr><td colspan='5' style='text-align:center;padding:20px;color:red'><b>DATABASE IS EMPTY!<br>Go to Render > Shell and run: python import_members.py</b></td></tr>"
+
+    html = f"""
+    <html><head><title>Lutali Admin</title>
+    <style>body{{font-family:Arial;padding:20px}}table{{width:100%;border-collapse:collapse}}th,td{{border:1px solid #ccc;padding:10px}}th{{background:#333;color:#fff}}a{{text-decoration:none}}</style>
+    </head><body>
+    <h1>Lutali Foundation - Members ({count})</h1>
+    <a href='/add-member/' style='background:green;color:white;padding:10px 15px;border-radius:5px'>+ ADD MEMBER</a>
+    <br><br>
+    <table><tr><th>Member No</th><th>Full Name</th><th>Phone</th><th>Status</th><th>Action</th></tr>
+    {rows}
+    </table>
+    <br><br><p>Live URL: https://lutali-foundation-4x36.onrender.com/admin-dashboard/</p>
+    </body></html>
+    """
     return HttpResponse(html)
 
+@csrf_exempt
 def add_member(request):
     if request.method == 'POST':
         Member.objects.create(
@@ -44,36 +44,37 @@ def add_member(request):
         return redirect('/admin-dashboard/')
     return HttpResponse("""
     <h2>Add Member</h2>
-    <form method='post'>""" + """<input type='hidden' name='csrfmiddlewaretoken' value=''>""" + """
+    <form method='POST'>
     Member No: <input name='member_no' required><br><br>
     Full Name: <input name='full_name' required><br><br>
     Phone: <input name='phone' required><br><br>
     Status: <input name='status' value='Active'><br><br>
-    <button type='submit'>Save</button>
-    </form><a href='/admin-dashboard/'>Back</a>
+    <button type='submit'>SAVE</button>
+    </form><br><a href='/admin-dashboard/'>Back to Dashboard</a>
     """)
 
+@csrf_exempt
 def edit_member(request, member_id):
-    member = get_object_or_404(Member, id=member_id)
+    m = get_object_or_404(Member, id=member_id)
     if request.method == 'POST':
-        member.member_no = request.POST.get('member_no')
-        member.full_name = request.POST.get('full_name')
-        member.phone = request.POST.get('phone')
-        member.status = request.POST.get('status')
-        member.save()
+        m.member_no = request.POST.get('member_no')
+        m.full_name = request.POST.get('full_name')
+        m.phone = request.POST.get('phone')
+        m.status = request.POST.get('status')
+        m.save()
         return redirect('/admin-dashboard/')
     return HttpResponse(f"""
-    <h2>Edit Member</h2>
-    <form method='post'>
-    Member No: <input name='member_no' value='{member.member_no}' required><br><br>
-    Full Name: <input name='full_name' value='{member.full_name}' required><br><br>
-    Phone: <input name='phone' value='{member.phone}' required><br><br>
-    Status: <input name='status' value='{member.status}'><br><br>
-    <button type='submit'>Update</button>
-    </form><a href='/admin-dashboard/'>Back</a>
+    <h2>Edit {m.full_name}</h2>
+    <form method='POST'>
+    Member No: <input name='member_no' value='{m.member_no}' required><br><br>
+    Full Name: <input name='full_name' value='{m.full_name}' required><br><br>
+    Phone: <input name='phone' value='{m.phone}' required><br><br>
+    Status: <input name='status' value='{m.status}'><br><br>
+    <button type='submit'>UPDATE</button>
+    </form><br><a href='/admin-dashboard/'>Back</a>
     """)
 
 def delete_member(request, member_id):
-    member = get_object_or_404(Member, id=member_id)
-    member.delete()
+    m = get_object_or_404(Member, id=member_id)
+    m.delete()
     return redirect('/admin-dashboard/')
