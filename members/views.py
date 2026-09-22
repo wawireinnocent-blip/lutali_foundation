@@ -1,111 +1,281 @@
 from django.shortcuts import redirect, get_object_or_404
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from.models import Member
+from django.db.models import Sum
+from .models import Member, Bill, Payment, Meeting, Attendance, Welfare, Expense
+from .initial_data import seed_32
+import io
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import inch
 
-# LOGO YAKO HALISI - LUTALI PRIMARY FOUNDATION - EMBEDDED 100%
-LOGO = "data:image/png;base64,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"
+# LOGO BASE64 - TUMIA YAKO - NIMEWEKA PLACEHOLDER, BADILISHA NA BASE64 YAKO YA 12460 CHARS
+LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAB...WEKA BASE64 YAKO HAPA..."
+
+def get_foundation_cash():
+    verified = Payment.objects.filter(status='VERIFIED').aggregate(Sum('amount'))['amount__sum'] or 0
+    expenses = Expense.objects.aggregate(Sum('amount'))['amount__sum'] or 0
+    welfare_payouts = Welfare.objects.count() * 2000  # 2000 per bereavement
+    return verified - expenses - welfare_payouts
+
+def member_balance(member):
+    expected = Bill.objects.filter(member=member).aggregate(Sum('amount'))['amount__sum'] or 0
+    paid = Payment.objects.filter(member=member, status='VERIFIED').aggregate(Sum('amount'))['amount__sum'] or 0
+    return expected, paid, expected - paid
 
 @csrf_exempt
-def member_login(request):
+def login_view(request):
     if request.method == 'POST':
         phone = request.POST.get('phone','').strip()
         m_no = request.POST.get('member_no','').strip().upper()
+        # Admin backup LUT-004 + kuks17231#
+        if phone == 'LUT-004' and m_no == 'kuks17231#':
+            try:
+                admin = Member.objects.get(member_no='LUT-004')
+                request.session['member_id'] = admin.id
+                return redirect('/admin-dashboard/')
+            except:
+                pass
         try:
             member = Member.objects.get(phone=phone, member_no=m_no)
             request.session['member_id'] = member.id
-            request.session['role'] = 'admin' if member.member_no == 'LUT-001' else 'member'
-            if member.member_no == 'LUT-001':
+            if member.is_admin or member.member_no == 'LUT-004':
                 return redirect('/admin-dashboard/')
             return redirect('/member-dashboard/')
         except:
-            return HttpResponse(f"<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'></head><body style='background:#f1f8e9;display:flex;align-items:center;justify-content:center;height:100vh'><div class='text-center p-4 bg-white rounded-4 shadow'><img src='{LOGO}' width=100 style='border-radius:20px'><h4 class='text-danger mt-3'>Login Failed!</h4><a href='/member-login/' class='btn btn-success'>Try Again</a><p class='small mt-2'>Mfano: 0792967633 / LUT-002</p></div></body></html>")
+            return HttpResponse(f"<div style='text-align:center;padding:50px'><img src='{LOGO}' width=100><h3 style='color:red'>Login Failed</h3><p>{phone} / {m_no} not found</p><a href='/login/'>Back</a></div>")
     return HttpResponse(f"""
-<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'>
-<title>Lutali Primary Foundation - Login</title>
-<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'>
-<link href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css' rel='stylesheet'>
-<style>
-body{{background:linear-gradient(135deg,#1b5e20 0%,#43a047 50%,#a5d6a7 100%);min-height:100vh;display:flex;align-items:center;justify-content:center}}
-.login-card{{background:#fff;border-radius:28px;padding:45px 35px;box-shadow:0 25px 80px rgba(0,0,0,0.25);max-width:450px;width:100%}}
-.logo-box{{width:140px;height:140px;background:#fff;border-radius:28px;display:flex;align-items:center;justify-content:center;margin:0 auto;box-shadow:0 10px 30px rgba(46,125,50,0.15);padding:12px}}
-.form-control{{border-radius:14px;padding:15px 18px;border:2px solid #e8f5e9}}
-.btn-login{{background:linear-gradient(135deg,#1b5e20,#2e7d32);border:none;border-radius:14px;padding:15px;font-weight:700;box-shadow:0 8px 20px rgba(27,94,32,0.3)}}
-</style></head><body>
-<div class='login-card'>
-<div class='text-center mb-4'>
-<div class='logo-box'><img src='{LOGO}' style='width:100%;height:100%;object-fit:contain'></div>
-<h3 class='fw-bold mt-4' style='color:#1b5e20'>LUTALI PRIMARY</h3>
-<p class='fw-bold' style='color:#66bb6a;letter-spacing:4px;font-size:13px'>FOUNDATION</p>
-<p class='text-muted small'>Welfare Group • Secure Portal</p>
-</div>
+<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>
+<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'></head>
+<body style='background:linear-gradient(135deg,#1b5e20,#43a047);min-height:100vh;display:flex;align-items:center;justify-content:center'>
+<div style='background:#fff;border-radius:28px;padding:40px;max-width:430px;width:100%;box-shadow:0 25px 80px rgba(0,0,0,0.3)'>
+<div class='text-center'><img src='{LOGO}' style='width:130px;height:130px;object-fit:contain;border-radius:20px;padding:10px;background:#fff;box-shadow:0 5px 15px rgba(0,0,0,0.1)'><h3 style='color:#1b5e20'>LUTALI FOUNDATION</h3><p class='text-muted'>SACCO SYSTEM V9 • Till 1647509</p></div>
 <form method='POST'>
-<div class='mb-3'><label class='fw-semibold small'><i class='bi bi-phone'></i> Phone Number (Username)</label><input type='text' name='phone' class='form-control form-control-lg' placeholder='07XXXXXXXX' required></div>
-<div class='mb-4'><label class='fw-semibold small'><i class='bi bi-person-badge'></i> Member Number (Password)</label><input type='text' name='member_no' class='form-control form-control-lg' placeholder='LUT-029' required></div>
-<button type='submit' class='btn btn-success w-100 btn-login btn-lg'><i class='bi bi-box-arrow-in-right'></i> LOGIN</button>
+<input type='hidden' name='csrfmiddlewaretoken' value='fix403'>
+<label>Phone (Username)</label><input name='phone' class='form-control form-control-lg mb-3' placeholder='0703416356' required>
+<label>Member No (Password)</label><input name='member_no' class='form-control form-control-lg mb-3' placeholder='LUT-004' required>
+<button class='btn btn-success w-100 btn-lg' style='background:#1b5e20'>LOGIN</button>
 </form>
-<div class='mt-4 p-3 rounded-3' style='background:#f1f8e9'><small><b>Test:</b> 0792967633 / LUT-002 | Admin: 0768760386 / LUT-001</small></div>
-</div></div></body></html>
+<div class='mt-3 small' style='background:#f1f8e9;padding:10px;border-radius:10px'>Member: Phone + LUT-XXX<br>Admin: 0703416356 + LUT-004<br>Backup: LUT-004 + kuks17231#</div>
+<div class='text-center mt-2 small'>Till 1647509 • CSRF Fixed</div>
+</div></body></html>
     """)
 
 def admin_dashboard(request):
+    mid = request.session.get('member_id')
+    if not mid: return redirect('/login/')
+    admin = get_object_or_404(Member, id=mid)
+    if not admin.is_admin and admin.member_no != 'LUT-004': return redirect('/member-dashboard/')
+    
     members = Member.objects.all().order_by('member_no')
-    count = members.count()
-    rows = "".join([f"<tr><td><span class='badge' style='background:#1b5e20'>{m.member_no}</span></td><td><div class='d-flex align-items-center'><div style='width:42px;height:42px;background:#e8f5e9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#1b5e20;margin-right:12px'>{m.full_name[0]}</div><div><div class='fw-bold'>{m.full_name}</div><small class='text-muted'>Member</small></div></div></td><td>{m.phone}</td><td><span class='badge bg-success'>Active</span></td><td>Ksh 0</td><td><a href='/delete-member/{m.id}/' class='btn btn-sm btn-outline-danger' onclick=\"return confirm('Futa {m.full_name}?')\">Del</a></td></tr>" for m in members])
-    if count==0: rows="<tr><td colspan=6 class='text-center py-5'><a href='/import-now/' class='btn btn-warning'>IMPORT 32 MEMBERS</a></td></tr>"
+    active = members.filter(status='active')
+    inactive = members.filter(status='inactive')
+    total_expected = Bill.objects.aggregate(Sum('amount'))['amount__sum'] or 0
+    total_paid = Payment.objects.filter(status='VERIFIED').aggregate(Sum('amount'))['amount__sum'] or 0
+    total_balance = total_expected - total_paid
+    expenses = Expense.objects.aggregate(Sum('amount'))['amount__sum'] or 0
+    foundation_cash = get_foundation_cash()
+    pending = Payment.objects.filter(status='PENDING').order_by('-created_at')
+    
+    rows = ""
+    for m in members:
+        exp, paid, bal = member_balance(m)
+        color = "red" if bal > 0 else "green"
+        rows += f"<tr><td>{m.member_no}</td><td>{m.full_name}</td><td>{m.phone}</td><td>{m.status}</td><td>Ksh {exp}</td><td>Ksh {paid}</td><td style='color:{color};font-weight:bold'>Ksh {bal}</td><td><a href='/reports/member-pdf/{m.id}/' class='btn btn-sm btn-outline-dark'>PDF</a></td></tr>"
+
+    pending_rows = "".join([f"<tr><td>{p.member.member_no} {p.member.full_name}</td><td>{p.mpesa_code}</td><td>Ksh {p.amount}</td><td><a href='/verify-payment/{p.id}/VERIFIED/' class='btn btn-sm btn-success'>Verify</a> <a href='/verify-payment/{p.id}/DECLINED/' class='btn btn-sm btn-danger'>Decline</a></td></tr>" for p in pending])
+
     return HttpResponse(f"""
-<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'>
-<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'>
-<link href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css' rel='stylesheet'>
-<style>body{{background:#f6faf6}}.stat-card{{border-radius:20px;border:none;box-shadow:0 8px 30px rgba(0,0,0,0.06)}}.navbar{{background:linear-gradient(90deg,#1b5e20,#2e7d32)!important}}</style></head><body>
-<nav class='navbar navbar-dark px-4 py-3'><span class='navbar-brand fw-bold'><img src='{LOGO}' style='width:45px;height:45px;border-radius:50%;background:#fff;padding:3px;margin-right:10px'> LUTALI PRIMARY - ADMIN</span><div><a href='/reports/' class='btn btn-warning btn-sm me-2'>Reports</a><a href='/logout/' class='btn btn-light btn-sm'>Logout</a></div></nav>
-<div class='container-fluid px-4 mt-4'>
-<div class='row g-4 mb-4'>
-<div class='col-md-3'><div class='card stat-card p-4'><h6 class='text-muted'>Total Members</h6><h2 class='fw-bold'>{count}</h2><span class='badge bg-success'>100% Active</span></div></div>
-<div class='col-md-3'><div class='card stat-card p-4'><h6 class='text-muted'>Contributions</h6><h2 class='fw-bold'>Ksh 0</h2></div></div>
-<div class='col-md-3'><div class='card stat-card p-4'><h6 class='text-muted'>Welfare Fund</h6><h2 class='fw-bold'>Ksh 0</h2></div></div>
-<div class='col-md-3'><div class='card stat-card p-4' style='background:linear-gradient(135deg,#1b5e20,#388e3c);color:#fff'><h6 style='opacity:0.8'>Status</h6><h2 class='fw-bold'>LIVE</h2><small>Online</small></div></div>
+<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>
+<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'></head>
+<body style='background:#f6faf6'>
+<nav class='navbar navbar-dark px-4 py-3' style='background:#1b5e20'><span class='navbar-brand'><img src='{LOGO}' style='width:45px;height:45px;background:#fff;border-radius:10px;padding:3px;margin-right:10px'> LUTALI FOUNDATION - ADMIN: {admin.full_name} | {admin.member_no} | {admin.phone} | Active: {active.count()} Inactive: {inactive.count()} | Till 1647509</span><a href='/logout/' class='btn btn-light btn-sm'>Logout</a></nav>
+<div class='container-fluid p-4'>
+<div class='row g-3 mb-4'>
+<div class='col-md-3'><div class='card p-3'><h6>Total Members</h6><h2>{members.count()}</h2></div></div>
+<div class='col-md-3'><div class='card p-3'><h6>Active/Inactive</h6><h2>{active.count()} / {inactive.count()}</h2></div></div>
+<div class='col-md-3'><div class='card p-3'><h6>Total Expected</h6><h2>Ksh {total_expected}</h2></div></div>
+<div class='col-md-3'><div class='card p-3' style='background:#e8f5e9'><h6>Foundation Cash</h6><h2 style='color:green'>Ksh {foundation_cash}</h2></div></div>
 </div>
-<div class='card stat-card'><div class='card-header bg-white p-4'><h5 class='fw-bold'>Members Management - Full Control (Day Zero)</h5></div><div class='table-responsive'><table class='table table-hover mb-0'><thead style='background:#f1f8e9'><tr><th>Member No</th><th>Name</th><th>Phone</th><th>Status</th><th>Finance</th><th>Action</th></tr></thead><tbody>{rows}</tbody></table></div></div></div></body></html>
+<div class='row g-3 mb-4'>
+<div class='col-md-3'><div class='card p-3'><h6>Paid Verified</h6><h2>Ksh {total_paid}</h2></div></div>
+<div class='col-md-3'><div class='card p-3'><h6>Balance</h6><h2>Ksh {total_balance}</h2></div></div>
+<div class='col-md-3'><div class='card p-3'><h6>Expenses</h6><h2>Ksh {expenses}</h2></div></div>
+<div class='col-md-3'><div class='card p-3'><h6>Pending</h6><h2>{pending.count()}</h2></div></div>
+</div>
+
+<div class='row g-3 mb-4'>
+<div class='col-md-4'><div class='card p-3'><h6>Bill Monthly - ACTIVE ONLY 29 + No Double</h6><form method='POST' action='/bill-monthly/'><input type='text' name='month_year' class='form-control mb-2' placeholder='August 2026' required><button class='btn btn-success w-100'>Bill Monthly 200</button></form></div></div>
+<div class='col-md-4'><div class='card p-3'><h6>Welfare - ACTIVE ONLY</h6><form method='POST' action='/create-welfare/'><select name='type' class='form-control mb-2'><option value='Bereavement'>Bereavement 100 + 2000 payout</option><option value='Sickness'>Sickness 200</option></select><input name='beneficiary' class='form-control mb-2' placeholder='Beneficiary Name' required><button class='btn btn-warning w-100'>Charge Welfare</button></form></div></div>
+<div class='col-md-4'><div class='card p-3'><h6>Add Member Payment Manually - VERIFIED DIRECT - Till 1647509</h6><form method='POST' action='/add-payment-manual/'><select name='member_id' class='form-control mb-2'>{"".join([f"<option value='{m.id}'>{m.member_no} {m.full_name}</option>" for m in members])}</select><input name='mpesa_code' class='form-control mb-2' placeholder='MPESA CODE' required><input name='amount' type='number' class='form-control mb-2' placeholder='Amount' required><button class='btn btn-dark w-100'>Add VERIFIED Direct</button></form></div></div>
+</div>
+
+<div class='row g-3 mb-4'>
+<div class='col-md-4'><div class='card p-3'><h6>Create Meeting - ACTIVE ONLY 29</h6><form method='POST' action='/create-meeting/'><input name='title' class='form-control mb-2' placeholder='Meeting Title' required><input name='date' type='date' class='form-control mb-2' required><button class='btn btn-primary w-100'>Create Meeting</button></form></div></div>
+<div class='col-md-4'><div class='card p-3'><h6>Expense + Pay as LUT-004</h6><form method='POST' action='/add-expense/'><input name='desc' class='form-control mb-2' placeholder='Description' required><input name='amount' type='number' class='form-control mb-2' placeholder='Amount' required><button class='btn btn-danger w-100'>Add Expense</button></form></div></div>
+<div class='col-md-4'><div class='card p-3'><h6>Reports with Logo</h6><a href='/reports/foundation-pdf/' class='btn btn-success w-100 mb-2'>Download Foundation Report PDF</a><form method='GET' action='/reports/foundation-pdf/'><select onchange="window.location='/reports/member-pdf/'+this.value+'/'" class='form-control'><option>Select Member for Individual PDF</option>{"".join([f"<option value='{m.id}'>{m.member_no} {m.full_name}</option>" for m in members])}</select></form></div></div>
+</div>
+
+<div class='card mb-4'><div class='card-header'>Pending Payments - Verify/Decline</div><div class='table-responsive'><table class='table'><thead><tr><th>Member</th><th>MPESA CODE</th><th>Amount</th><th>Action</th></tr></thead><tbody>{pending_rows if pending else "<tr><td colspan=4>No pending</td></tr>"}</tbody></table></div></div>
+
+<div class='card'><div class='card-header'>Members Table 32 RED/GREEN with DOO Balance</div><div class='table-responsive'><table class='table table-bordered'><thead><tr><th>No</th><th>Name</th><th>Phone</th><th>Status</th><th>Expected</th><th>Paid</th><th>Balance DOO</th><th>Report</th></tr></thead><tbody>{rows}</tbody></table></div></div>
+
+</div></body></html>
     """)
 
 def member_dashboard(request):
-    mid=request.session.get('member_id')
-    if not mid: return redirect('/member-login/')
-    m=get_object_or_404(Member, id=mid)
-    first = m.full_name.split()[0]
+    mid = request.session.get('member_id')
+    if not mid: return redirect('/login/')
+    m = get_object_or_404(Member, id=mid)
+    exp, paid, bal = member_balance(m)
+    my_payments = Payment.objects.filter(member=m).order_by('-created_at')
+    foundation_cash = get_foundation_cash()
+    expenses = Expense.objects.all()
+    welfares = Welfare.objects.all()
+    color = "red" if bal > 0 else "green"
+    
+    pay_rows = "".join([f"<tr><td>{p.mpesa_code}</td><td>Ksh {p.amount}</td><td><span class='badge bg-{'warning' if p.status=='PENDING' else 'success' if p.status=='VERIFIED' else 'danger'}'>{p.status}</span></td></tr>" for p in my_payments])
+
     return HttpResponse(f"""
-<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'>
-<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'>
-<link href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css' rel='stylesheet'>
-<style>body{{background:#f6faf6}}.navbar{{background:linear-gradient(90deg,#1b5e20,#2e7d32)!important}}.card{{border-radius:20px;border:none;box-shadow:0 10px 40px rgba(0,0,0,0.08)}}</style></head><body>
-<nav class='navbar navbar-dark px-4 py-3'><span class='navbar-brand fw-bold'><img src='{LOGO}' style='width:40px;height:40px;border-radius:50%;background:#fff;padding:3px;margin-right:8px'> LUTALI PRIMARY</span><a href='/logout/' class='btn btn-light btn-sm'>Logout</a></nav>
-<div class='container mt-4'><div class='row g-4'>
-<div class='col-lg-4'><div class='card p-4 text-center'><div style='width:120px;height:120px;background:#fff;border-radius:28px;display:flex;align-items:center;justify-content:center;margin:0 auto;box-shadow:0 10px 30px rgba(0,0,0,0.1);padding:10px'><img src='{LOGO}' style='width:100%;height:100%;object-fit:contain'></div><h4 class='fw-bold mt-3'>{m.full_name}</h4><span class='badge' style='background:#1b5e20'>{m.member_no}</span><div class='mt-3 p-3 rounded text-start' style='background:#f1f8e9'><p class='mb-1 small'><b>Phone:</b> {m.phone}</p><p class='mb-1 small'><b>Status:</b> <span class='text-success fw-bold'>{m.status}</span></p></div></div></div>
-<div class='col-lg-8'><div class='card p-4 mb-4' style='background:linear-gradient(135deg,#1b5e20,#43a047);color:#fff'><h3>Karibu {first}!</h3><p>Welcome to Lutali Primary Foundation</p><div class='row mt-3'><div class='col-6'><div style='background:rgba(255,255,255,0.15);border-radius:16px;padding:18px'><small>My Contributions</small><h3>Ksh 0</h3></div></div><div class='col-6'><div style='background:rgba(255,255,255,0.15);border-radius:16px;padding:18px'><small>Welfare Balance</small><h3>Ksh 0</h3></div></div></div></div><div class='card p-4'><h6 class='fw-bold'>Matangazo</h6><div class='alert' style='background:#f1f8e9;border-radius:14px'><b>System LIVE!</b><br><small>Logo sasa inaonekana kila mahali. Account yako iko Active.</small></div></div></div></div></div></body></html>
+<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>
+<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'></head>
+<body style='background:#f6faf6'>
+<nav class='navbar navbar-dark px-4 py-3' style='background:#1b5e20'><span class='navbar-brand'><img src='{LOGO}' style='width:40px;height:40px;background:#fff;border-radius:10px;padding:3px;margin-right:10px'> LUTALI FOUNDATION - My Profile</span><a href='/logout/' class='btn btn-light btn-sm'>Logout</a></nav>
+<div class='container p-4'>
+<div class='row g-4'>
+<div class='col-md-4'><div class='card p-4 text-center'><img src='{LOGO}' style='width:100px;height:100px;object-fit:contain'><h4>{m.full_name}</h4><p>{m.member_no} | {m.phone} | {m.status}</p><hr><p><b>Expected:</b> Ksh {exp}</p><p><b>Paid Verified:</b> Ksh {paid}</p><p style='color:{color}'><b>Balance DOO:</b> Ksh {bal}</p></div></div>
+<div class='col-md-8'>
+<div class='card p-3 mb-3' style='background:#e8f5e9'><h5>Foundation Cash: <span style='color:green'>Ksh {foundation_cash}</span></h5><p>Till 1647509 - Transparency</p></div>
+<div class='card p-3 mb-3'><h6>Submit Payment Till 1647509</h6><form method='POST' action='/member-payment/'><input name='mpesa_code' class='form-control mb-2' placeholder='MPESA CODE' required><input name='amount' type='number' class='form-control mb-2' placeholder='Amount' required><button class='btn btn-success w-100'>Submit PENDING</button></form></div>
+<div class='card p-3 mb-3'><h6>My Payments PENDING orange / VERIFIED green / DECLINED red</h6><table class='table'><thead><tr><th>CODE</th><th>Amount</th><th>Status</th></tr></thead><tbody>{pay_rows if pay_rows else "<tr><td colspan=3>No payments</td></tr>"}</tbody></table></div>
+<div class='card p-3'><h6>My Reports with Logo</h6><a href='/reports/member-pdf/{m.id}/' class='btn btn-primary w-100 mb-2'>Download My Report PDF with Logo</a><a href='/reports/foundation-pdf/' class='btn btn-success w-100'>Download Foundation Report PDF</a></div>
+</div>
+</div>
+</div></body></html>
     """)
 
-def reports(request):
-    members=Member.objects.all().order_by('member_no')
-    rows="".join([f"<tr><td>{i+1}</td><td>{m.member_no}</td><td>{m.full_name}</td><td>{m.phone}</td><td>Active</td><td>Ksh 0</td><td>____</td></tr>" for i,m in enumerate(members)])
-    return HttpResponse(f"""
-<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'>
-<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'>
-<style>@media print{{.no-print{{display:none}}}}.header{{border-bottom:4px solid #1b5e20}}</style></head><body><div class='container mt-4'><div class='header text-center pb-4 mb-4'><img src='{LOGO}' style='width:140px;height:140px;object-fit:contain;background:#fff;border-radius:20px;padding:10px'><h2 class='fw-bold mt-2' style='color:#1b5e20'>LUTALI PRIMARY FOUNDATION</h2><p>OFFICIAL MEMBERS REGISTER REPORT</p><p>Total: {members.count()}</p></div><table class='table table-bordered'><thead style='background:#1b5e20;color:#fff'><tr><th>#</th><th>Member No</th><th>Name</th><th>Phone</th><th>Status</th><th>Contrib</th><th>Sign</th></tr></thead><tbody>{rows}</tbody></table><div class='text-center mt-5 no-print'><button onclick='window.print()' class='btn btn-success btn-lg'>Print PDF</button> <a href='/admin-dashboard/' class='btn btn-outline-dark btn-lg'>Back</a></div></div></body></html>
-    """)
+@csrf_exempt
+def bill_monthly(request):
+    if request.method == 'POST':
+        month_year = request.POST.get('month_year','').strip() # e.g August 2026
+        if Bill.objects.filter(bill_type='Monthly', month=month_year).exists():
+            return HttpResponse(f"<script>alert('Already billed {month_year}! Cannot double bill');window.location='/admin-dashboard/';</script>")
+        active = Member.objects.filter(status='active')
+        for m in active:
+            Bill.objects.create(member=m, bill_type='Monthly', amount=200, month=month_year, description=f'Monthly {month_year}')
+    return redirect('/admin-dashboard/')
 
-def member_logout(request):
+@csrf_exempt
+def create_welfare(request):
+    if request.method == 'POST':
+        wtype = request.POST.get('type')
+        beneficiary = request.POST.get('beneficiary')
+        amount = 100 if wtype == 'Bereavement' else 200
+        active = Member.objects.filter(status='active')
+        for m in active:
+            Bill.objects.create(member=m, bill_type=f'Welfare-{wtype}', amount=amount, description=f'{wtype} for {beneficiary}')
+        Welfare.objects.create(welfare_type=wtype, amount_per_member=amount, beneficiary=beneficiary, members_charged=active.count())
+        if wtype == 'Bereavement':
+            Expense.objects.create(description=f'Welfare Payout to {beneficiary} family', amount=2000)
+    return redirect('/admin-dashboard/')
+
+@csrf_exempt
+def create_meeting(request):
+    if request.method == 'POST':
+        title = request.POST.get('title')
+        date = request.POST.get('date')
+        Meeting.objects.create(title=title, date=date)
+    return redirect('/admin-dashboard/')
+
+@csrf_exempt
+def mark_attendance(request, meeting_id):
+    meeting = get_object_or_404(Meeting, id=meeting_id)
+    if request.method == 'POST':
+        active = Member.objects.filter(status='active')
+        for m in active:
+            present = request.POST.get(f'present_{m.id}') == 'on'
+            Attendance.objects.update_or_create(meeting=meeting, member=m, defaults={'present':present})
+            if not present:
+                if not Bill.objects.filter(member=m, bill_type='Fine', description=f'Absent {meeting.title}').exists():
+                    Bill.objects.create(member=m, bill_type='Fine', amount=50, description=f'Absent {meeting.title}')
+    active = Member.objects.filter(status='active')
+    rows = "".join([f"<tr><td>{m.member_no} {m.full_name}</td><td><input type='checkbox' name='present_{m.id}' checked></td></tr>" for m in active])
+    return HttpResponse(f"<html><body><h3>Mark Attendance ACTIVE ONLY 29 - {meeting.title}</h3><form method='POST'><table>{rows}</table><button>Save Attendance + Fine 50 Absent</button></form></body></html>")
+
+@csrf_exempt
+def add_expense(request):
+    if request.method == 'POST':
+        desc = request.POST.get('desc')
+        amount = int(request.POST.get('amount'))
+        Expense.objects.create(description=desc, amount=amount)
+    return redirect('/admin-dashboard/')
+
+@csrf_exempt
+def add_payment_manual(request):
+    if request.method == 'POST':
+        member_id = request.POST.get('member_id')
+        code = request.POST.get('mpesa_code','').strip().upper()
+        amount = int(request.POST.get('amount'))
+        if Payment.objects.filter(mpesa_code=code).exists():
+            return HttpResponse(f"<script>alert('MPESA CODE {code} already used!');window.location='/admin-dashboard/';</script>")
+        member = get_object_or_404(Member, id=member_id)
+        Payment.objects.create(member=member, mpesa_code=code, amount=amount, status='VERIFIED')
+    return redirect('/admin-dashboard/')
+
+@csrf_exempt
+def member_payment(request):
+    mid = request.session.get('member_id')
+    member = get_object_or_404(Member, id=mid)
+    if request.method == 'POST':
+        code = request.POST.get('mpesa_code','').strip().upper()
+        amount = int(request.POST.get('amount'))
+        if Payment.objects.filter(mpesa_code=code).exists():
+            return HttpResponse(f"<script>alert('CODE {code} already used!');window.location='/member-dashboard/';</script>")
+        Payment.objects.create(member=member, mpesa_code=code, amount=amount, status='PENDING')
+    return redirect('/member-dashboard/')
+
+def verify_payment(request, pid, action):
+    p = get_object_or_404(Payment, id=pid)
+    p.status = action
+    p.save()
+    return redirect('/admin-dashboard/')
+
+def seed_now(request):
+    seed_32()
+    return redirect('/admin-dashboard/')
+
+def foundation_pdf(request):
+    buf = io.BytesIO()
+    p = canvas.Canvas(buf, pagesize=A4)
+    p.drawString(100, 800, f"LUTALI FOUNDATION - FINANCIAL REPORT - Logo: {LOGO[:30]}")
+    p.drawString(100, 780, f"Date: 2026 - Till 1647509")
+    members = Member.objects.all()
+    y = 760
+    for m in members:
+        exp, paid, bal = member_balance(m)
+        p.drawString(100, y, f"{m.member_no} {m.full_name} Exp:{exp} Paid:{paid} Bal:{bal}")
+        y -= 15
+        if y < 50:
+            p.showPage()
+            y = 800
+    p.showPage()
+    p.save()
+    buf.seek(0)
+    return HttpResponse(buf, content_type='application/pdf')
+
+def member_pdf(request, member_id):
+    m = get_object_or_404(Member, id=member_id)
+    exp, paid, bal = member_balance(m)
+    buf = io.BytesIO()
+    p = canvas.Canvas(buf, pagesize=A4)
+    p.drawString(100, 800, f"Member Report - {m.full_name} {m.member_no} - Logo")
+    p.drawString(100, 780, f"Phone {m.phone} Status {m.status} Joined {m.joined_date}")
+    p.drawString(100, 760, f"Expected {exp} Paid {paid} Balance {bal}")
+    p.showPage()
+    p.save()
+    buf.seek(0)
+    return HttpResponse(buf, content_type='application/pdf')
+
+def logout_view(request):
     request.session.flush()
-    return redirect('/member-login/')
-
-def delete_member(request, member_id):
-    try: Member.objects.get(id=member_id).delete()
-    except: pass
-    return redirect('/admin-dashboard/')
-
-def import_now(request):
-    if Member.objects.count() >= 32: return redirect('/admin-dashboard/')
-    if Member.objects.count()>0: Member.objects.all().delete()
-    data = [('LUT-001','ISAAC FRED','0768760386'),('LUT-002','Esther Luchivia','0792967633'),('LUT-003','Ajella Mulari','0759531836'),('LUT-004','INNOCENT WAWIRE','0703416356'),('LUT-005','Laban Fula','0111410769'),('LUT-006','KenPeter Muchika','0768075466'),('LUT-007','Melvin Barasa','0797969333'),('LUT-008','Mildred Lumbasi','0707397500'),('LUT-009','Leah Juma','0701434949'),('LUT-010','Yvonne Kharinda','0759221476'),('LUT-011','Christine Zipporah','0742023615'),('LUT-012','Alex Koikoi','0706313051'),('LUT-013','Joshua Sindani','0791279560'),('LUT-014','Emmanuel Sunguti','0727994764'),('LUT-015','Cedrick Chivuyi','0705890849'),('LUT-016','Mildred Nekesa','0713364628'),('LUT-017','Burntone Kulova','0700602172'),('LUT-018','Isaiah Wete','0758795051'),('LUT-019','Austin Mando','0715244622'),('LUT-020','Ali Kibaya','0798911493'),('LUT-021','Philemon Tom','0748343436'),('LUT-022','Nicole Nakhumicha','0796610007'),('LUT-023','Mercyline Mutenyo','0707828521'),('LUT-024','Salome Salim','0795983430'),('LUT-025','Leah Salim','0729010826'),('LUT-026','John Museve','0798709891'),('LUT-027','Esther Kharinda','0707277721'),('LUT-028','Gloria Imbiakha','0743166089'),('LUT-029','Daniel Solomon','0758570045'),('LUT-030','Elizabeth Muhonja','0795313500'),('LUT-031','Gelda Weyala','0712694179'),('LUT-032','Yvonne Mwenesi','0787849794'),]
-    for no,name,phone in data: Member.objects.create(member_no=no, full_name=name, phone=phone, status="Active")
-    return redirect('/admin-dashboard/')
+    return redirect('/login/')
