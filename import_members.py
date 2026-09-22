@@ -1,14 +1,27 @@
 import os
+import sys
 import json
-import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings')
-django.setup()
+# Hakikisha Django inapata settings
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(BASE_DIR)
+sys.path.append(os.path.join(BASE_DIR, 'lutali'))
+sys.path.append(os.path.join(BASE_DIR, 'lutali_foundation'))
+
+# Jaribu settings zote
+for mod in ['settings', 'lutali.settings', 'lutali_foundation.settings']:
+    try:
+        os.environ['DJANGO_SETTINGS_MODULE'] = mod
+        import django
+        django.setup()
+        print(f"Using settings: {mod}")
+        break
+    except:
+        continue
 
 from members.models import Member
 
-print("Loading members from full_backup.json...")
-
+print("Loading from full_backup.json...")
 try:
     with open('full_backup.json', 'r') as f:
         data = json.load(f)
@@ -25,9 +38,8 @@ try:
         )
         count += 1
     
-    print(f"✅ SUCCESSFULLY IMPORTED {count} MEMBERS - PERMANENT!")
-    
-except FileNotFoundError:
-    print("full_backup.json not found, skipping import")
+    print(f"✅ IMPORTED {count} MEMBERS - HAWATAPOTEA TENA!")
 except Exception as e:
     print(f"Error: {e}")
+    import traceback
+    traceback.print_exc()
