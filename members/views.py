@@ -3,7 +3,6 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import Member
 
-@login_required
 def admin_dashboard(request):
     members = Member.objects.all().order_by('member_number')
     active_count = members.filter(status='ACTIVE').count()
